@@ -87,12 +87,16 @@
         this.style.width = this.width+"px";
         if (this.svg) {
           this.svg.attr("width", this.width);
+          this.force.size([this.width, this.height]);
+          this.force.resume();
         }
       },
       heightChanged: function () {
         this.style.height = this.height+"px";
         if (this.svg) {
-          this.svg.attr("width", this.width);
+          this.svg.attr("height", this.height);
+          this.force.size([this.width, this.height]);
+          this.force.resume();
         }
       },
       setupForceLayout: function () {
