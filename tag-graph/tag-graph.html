@@ -1,0 +1,308 @@
+<link rel="import" href="tag-graph-edges.html">
+<link rel="import" href="tag-graph-tags.html">
+<link rel="import" href="tag-graph-tag.html">
+<link rel="import" href="hash-tag.html">
+
+<polymer-element name="tag-graph" attributes="width height" touch-action="none">
+
+  <template>
+    <tag-graph-edges id="edges"></tag-graph-edges>
+    <tag-graph-tags id="tags"></tag-graph-tags>
+    <content></content>
+  </template>
+
+  <link rel="stylesheet" href="tag-graph.css" />
+
+  <script type="text/javascript" src="../bower_components/d3/d3.min.js"></script>
+
+  <script>
+    "use strict";
+    Polymer('tag-graph', {
+      tags: [],
+      tagElements: [],
+      nodes: [],
+      visibleNodes: [],
+      layoutNodes: [],
+      links: [],
+      width: 500,
+      height: 500,
+      ready: function () {
+        this.observe();
+
+        Object.keys(this.childNodes).forEach(function(n){
+          var el = this.childNodes[n];
+          if (!el.innerHTML){
+            // Todo: deal with text nodes?
+            return;
+          }
+          this.addNode(el);
+        }.bind(this));
+
+        // d3
+        this.setupForceLayout();
+
+        // Draggable
+        this.setupGestures();
+      },
+      enteredView: function () {
+      },
+      setupGestures: function () {
+        function getNode (event, context) {
+          var index = context.visibleNodes.indexOf(event.target);
+          if (index === -1) { 
+            return; 
+          }
+          return context.layoutNodes[index];
+        }
+        window.addEventListener('pointerover', function (event) {
+          var node = getNode(event, this);
+          if (!node) { return; }
+          node.fixed = true;
+          this.force.resume();
+        }.bind(this));
+        window.addEventListener('pointerout', function (event) {
+          var node = getNode(event, this);
+          if (!node) { return; }
+          node.fixed = false;
+          this.force.resume();
+        }.bind(this));
+        window.addEventListener('track', function (event) {
+          var node = getNode(event, this);
+          if (!node) { return; }
+          node.fixed = true;
+          node.x += event.ddx;
+          node.px = node.x;
+          node.y += event.ddy;
+          node.py = node.y;
+          this.force.resume();
+        }.bind(this));
+        window.addEventListener('trackend', function (event) {
+          var node = getNode(event, this);
+          if (!node) { return; }
+          node.fixed = false;
+          this.force.resume();
+        }.bind(this));
+      },
+      widthChanged: function () {
+        this.style.width = this.width+"px";
+        if (this.svg) {
+          this.svg.attr("width", this.width);
+        }
+      },
+      heightChanged: function () {
+        this.style.height = this.height+"px";
+        if (this.svg) {
+          this.svg.attr("width", this.width);
+        }
+      },
+      setupForceLayout: function () {
+        // Todo: extract the needed stuff from d3
+
+        var width = this.width;
+        var height = this.height;
+
+        var force = d3.layout.force()
+          .size([width, height])
+          .nodes(this.layoutNodes)
+          .links(this.links)
+          .linkDistance(75)
+          .charge(-300)
+          .on("tick", tick);
+
+        this.force = force;
+
+        // function linkDistance (link) {
+        //   var dist = (link.source.el.offsetWidth + link.target.el.offsetWidth)/2;
+        //   dist = Math.min(200, dist);
+        //   return dist;
+        // }
+
+        var svg = d3.select(this.$.edges).append("svg")
+          .attr("class", "tag-graph-edges-svg")
+          .attr("width", this.width)
+          .attr("height", this.height);
+
+        this.svg = svg;
+
+        var nodes = force.nodes(),
+          links = force.links(),
+          node = svg.selectAll(".node"),
+          link = svg.selectAll(".link");
+
+        function tick () {
+          // Draw lines
+          link.attr("x1", function(d) { return d.source.x; })
+              .attr("y1", function(d) { return d.source.y; })
+              .attr("x2", function(d) { return d.target.x; })
+              .attr("y2", function(d) { return d.target.y; });
+          // Move nodes
+          // node.attr("cx", function(d) { return d.x; });
+          // node.attr("cy", function(d) { return d.y; });
+          node.each(function(n){
+            move(n.el, n.x, n.y);
+          });
+        }
+
+        function move (el, x, y) {
+          // Centered
+          x = Math.round(x - el.offsetWidth/2);
+          y = Math.round(y - el.offsetHeight/2);
+          var move = "translate3d("+x+"px,"+y+"px,0px)";
+          
+          // TODO prefix test
+          el.style.webkitTransform = move;
+          el.style.MozTransform = move;
+          el.style.msTransform = move;
+          el.style.OTransform = move;
+          el.style.transform = move;
+          return el;
+        }
+
+        function restart() {
+          link = link.data(links);
+
+          link.enter().insert("line", ".node")
+              .attr("class", "link");
+
+          node = node.data(nodes);
+
+          node.enter().insert("circle", ".cursor")
+              .attr("class", "node")
+              .attr("r", 2);
+              // .call(force.drag);
+
+          force.start();
+        }
+        this.restartForce = function(){ restart(); };
+
+        restart();
+
+      },
+      addNode: function (el) {
+        // Short circuit for tag-graph elements
+        if (el.nodeName.indexOf('TAG-GRAPH') !== -1) { return; }
+        if (!el.innerHTML) { return; }
+
+        // Short circuit for already-added elements
+        if (this.nodes.indexOf(el) !== -1) {
+          return;
+        } else {
+          this.nodes.push(el);
+          this.addVisible(el);
+        }
+
+        // Hash tags
+        var content = el.innerHTML;
+        // Get array of tags
+        var reg = /#[^\s]+/g;
+        var tags = el.innerHTML.match(reg);
+        if (tags) {
+          tags = tags.map(function(tag){
+            return tag.substr(1).toLowerCase();
+          });
+          var dataTags = el.dataset.tags;
+          if (dataTags) {
+            // Make sure already-set tags are kept
+            dataTags = dataTags.split(" ");
+            dataTags.forEach(function(tag){
+              // Only unique
+              if (tags.indexOf(tag) === -1) {
+                tags.push(tag);
+              }
+            });
+          }
+          el.dataset.tags = tags.join(" ");
+        }
+        // Wrap hashtags
+        el.innerHTML = el.innerHTML.replace(reg, function(hash){
+          var show = hash.substr(1);
+          var tag = show.toLowerCase();
+          return '<hash-tag tag="'+tag+'">' + show + "</hash-tag>";
+        });
+
+        // Attribute tags, including all added above
+        var nodeIndex = this.visibleNodes.indexOf(el);
+        el.dataset.tags.split(" ").forEach(function(tag){
+          var tagEl = this.addTag(tag);
+          this.links.push({
+            source: nodeIndex,
+            target: this.visibleNodes.indexOf(tagEl)
+          });
+        }.bind(this));
+
+        // Make editable
+        el.contentEditable = true;
+
+        // Flickr, Twitter, YouTube link tags?
+
+        // Restart force graph
+        if (this.restartForce) {
+          this.restartForce();
+        }
+      },
+      addTag: function (tag) {
+        var el;
+        var index = this.tags.indexOf(tag);
+        // Only unique
+        if (index !== -1) {
+          el = this.tagElements[index];
+        } else {
+          el = document.createElement("tag-graph-tag");
+          el.textContent = tag;
+          this.$.tags.appendChild(el);
+          this.addVisible(el);
+
+          this.tags.push(tag);
+          this.tagElements.push(el);
+        }
+        return el;
+      },
+      addVisible: function (el) {
+        // Only unique
+        if (this.visibleNodes.indexOf(el) === -1) {
+          this.visibleNodes.push(el);
+          this.layoutNodes.push({
+            index: this.visibleNodes.length-1,
+            x: 0,
+            y: 0,
+            fixed: false,
+            el: el
+          });
+        }
+      },
+      observer: null,
+      handleMutations: function (mutations) {
+        mutations.forEach(function (mutation) {
+          var addedNodes = Array.prototype.slice.call(mutation.addedNodes);
+          addedNodes.forEach(function (node) {
+            switch (node.nodeName) {
+              default: 
+                this.addNode(node);
+                break;
+            }
+          }.bind(this));
+          var removedNodes = Array.prototype.slice.call(mutation.removedNodes);
+          removedNodes.forEach(function (node) {
+            switch (node.nodeName) {
+            }
+          }.bind(this));
+        }.bind(this));
+      },
+      observe: function () {
+        this.observer = new MutationObserver(this.handleMutations.bind(this));
+        this.observer.observe(this, {
+          subtree: false,
+          childList: true,
+          attributes: false,
+          characterData: false
+        });
+      },
+      leftView: function () {
+        if (this.observer) {
+          this.observer.disconnect();
+        }
+      }
+    });
+  </script>
+  
+</polymer-element>
