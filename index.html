@@ -10,17 +10,27 @@
   </head>
   <body style="margin:0; overflow:hidden;">
 
-    <link rel="import" href="tag-graph/tag-graph.html">
-    <tag-graph id="tag-graph-v-1" width="1000" height="400">
-      <div data-tags="hello taggraph">ahoy</div>
-      <div>#Hello #world testing 123.</div>
-      <div data-tags="datatag">both #hashtag and datatag</div>
-    </tag-graph>
-
-    <form id="add-form" action="#" style="position:absolute; bottom:10px; left:100px;">
-      <input id="add-input" type="text" value="#hello taggraph" style="width:500px; font-size:150%;"></input>
-      <button type="submit" style="font-size:150%;">add</button>
-    </form>
+    <link rel="import" href="tag-graph/tag-graph-editor.html">
+    <tag-graph-editor id="tag-graph-v-1">
+      <div>the start of a #non-linear note-taking #web app</div>
+      <div>webbiness of the #web is #links</div>
+      <div>#hashtag connects #idea</div>
+      <div>No #idea is an island</div>
+      <div>#Hashtag faster to type than #links</div>
+      <div>force-directed #graph #layout is #non-hierarchical</div>
+      <div>#layout by <a href="https://github.com/mbostock/d3/wiki/Force-Layout">d3</a></div>
+      <div>#idea + #graph ~ ideagraph or #taggraph</div>
+      <div>#taggraph.com was a flash project to #explore flickr</div>
+      <div>#todo only show part of graph, #explore</div>
+      <div>#todo click back to editor</div>
+      <div>#todo autotagging?</div>
+      <div>#todo other ways to connect nodes?</div>
+      <div>#todo #collaborative features</div>
+      <div>#todo clean dead nodes and tags</div>
+      <div>#todo plural?</div>
+      <div>#non-linear ~ #non-hierarchical</div>
+      <div>#explore = click node see neighbors and their neighbors</div>
+    </tag-graph-editor>
 
     <div id="loading" style="position:absolute; top:10px; left:10px; background-color:white; padding:10px; border-radius:5px;">
       <div id="loading-message">loading custom elements...</div>
@@ -28,8 +38,6 @@
 
     <script type="text/javascript">
     (function(){
-
-      var tagGraph = document.getElementById("tag-graph-v-1");
 
       // GSS.worker = '../bower_components/gss/browser/gss-solver.min.js'
       Polymer.veiledElements = ["the-graph-editor"];
@@ -39,24 +47,14 @@
         loading.parentNode.removeChild(loading);
       });
 
+      // Fullscreen
+      var tagGraph = document.getElementById("tag-graph-v-1");
       function resize () {
         tagGraph.setAttribute("width", window.innerWidth);
         tagGraph.setAttribute("height", window.innerHeight);
       }
       window.addEventListener('resize', resize);
       resize();
-
-      var form = document.getElementById("add-form");
-      var input = document.getElementById("add-input");
-      form.onsubmit = function (event) {
-        var div = document.createElement("div");
-        div.textContent = input.value;
-        tagGraph.appendChild(div);
-        input.value = "#random " + Math.floor(Math.random()*1000000000).toString(36);
-
-        return false;
-      };
-
 
     }());
     </script>

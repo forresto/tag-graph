@@ -1,0 +1,152 @@
+<link rel="import" href="tag-graph.html">
+<link rel="import" href="tag-graph-node.html">
+
+<polymer-element name="tag-graph-editor" attributes="width height">
+
+  <style>
+    tag-graph-editor {
+      position: relative;
+    }
+    tag-graph {
+      position: absolute; 
+      top: 0; 
+      left: 0;
+    }
+    #editor {
+      position: absolute; 
+      top: 0; 
+      left: 0; 
+      width: 250px;
+      height: 500px;
+      border: 1px black solid;
+    }
+    #editor > div {
+      margin-bottom: 10px;
+    }
+  </style>
+
+  <template>
+    <tag-graph id="taggraph" width="{{width-250}}" height="{{height}}" left="250">
+    </tag-graph>
+    <div id="editor" contenteditable="true" >
+      <content></content>
+    </div>
+  </template>
+
+  <script>
+    "use strict";
+    Polymer('tag-graph-editor', {
+      width: 500,
+      height: 500,
+      trackedNodes: [],
+      trackedNodesMeta: [],
+      ready: function () {
+        //
+        window.TagGraph = this.$.taggraph;
+        // Initial
+        Object.keys(this.$.editor.childNodes).forEach(function(n){
+          var el = this.$.editor.childNodes[n];
+          if (!el.innerHTML){
+            // Todo: deal with text nodes?
+            return;
+          }
+          this.addNode(el);
+        }.bind(this));
+        // Future
+        this.observe();
+      },
+      enteredView: function () {
+      },
+      widthChanged: function () {
+        this.style.width = this.width+"px";
+      },
+      heightChanged: function () {
+        this.style.height = this.height+"px";
+        this.$.editor.style.height = this.height+"px";
+      },
+      formSubmit: function (event) {
+        event.preventDefault();
+
+        var div = document.createElement("div");
+        div.textContent = this.$.addinput.value;
+        this.appendChild(div);
+        this.$.addinput.value = "#random " + Math.floor(Math.random()*1000000000).toString(36);
+
+        return false;
+      },
+      addNode: function (node) {
+        // Ignore text nodes
+        if (!node.innerHTML) { return; }
+        // Test unique
+        var index = this.trackedNodes.indexOf(node);
+        if (index !== -1) {
+          return;
+        }
+        var clone = document.createElement("tag-graph-node");
+        clone.html = node.innerHTML;
+        this.$.taggraph.$.nodes.appendChild(clone);
+
+        this.trackedNodes.push(node);
+        this.trackedNodesMeta.push({
+          original: node,
+          clone: clone,
+          visible: true
+        });
+      },
+      removeNode: function (node) {
+        var index = this.trackedNodes.indexOf(node);
+        if (index === -1) { return; }
+        var meta = this.trackedNodesMeta[index];
+        if (!meta) { return; }
+        meta.visible = false;
+        meta.clone.parentNode.removeChild(meta.clone);
+      },
+      changeNode: function (node) {
+        var index = this.trackedNodes.indexOf(node);
+        if (index === -1) { return; }
+        var meta = this.trackedNodesMeta[index];
+        if (!meta) { return; }
+
+        meta.clone.html = node.innerHTML;
+        // meta.clone.checkTags();
+      },
+      observer: null,
+      handleMutations: function (mutations) {
+        mutations.forEach(function (mutation) {
+          switch (mutation.type) {
+            case 'characterData':
+              this.changeNode(mutation.target.parentNode);
+              break;
+            case 'childList':
+              var addedNodes = Array.prototype.slice.call(mutation.addedNodes);
+                addedNodes.forEach(function (node) {
+                  this.addNode(node);
+                }.bind(this));
+                var removedNodes = Array.prototype.slice.call(mutation.removedNodes);
+                removedNodes.forEach(function (node) {
+                  this.removeNode(node);
+                }.bind(this));
+              break;
+            default:
+              break;
+          }
+        }.bind(this));
+      },
+      observe: function () {
+        this.observer = new MutationObserver(this.handleMutations.bind(this));
+        this.observer.observe(this.$.editor, {
+          subtree: true,
+          childList: true,
+          // attributes: false,
+          characterData: true
+        });
+      },
+      leftView: function () {
+        if (this.observer) {
+          this.observer.disconnect();
+        }
+      }
+    });
+  </script>
+  
+</polymer-element>

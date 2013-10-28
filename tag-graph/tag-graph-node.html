@@ -1,0 +1,113 @@
+<polymer-element name="tag-graph-node" attributes="fixed html" touch-action="none" lightdom>
+
+  <template>
+    <content></content>
+  </template>
+
+  <script>
+    "use strict";
+    Polymer('tag-graph-node', {
+      layoutItem: null,
+      fixed: false,
+      html: "",
+      tags: [],
+      ready: function () {
+        this.linkedTags = [];
+        // Pause on pointerover, easier to catch
+        this.addEventListener('pointerover', function (event) {
+          var node = this.layoutItem;
+          if (!node) { return; }
+          node.fixed = true;
+        }.bind(this));
+        this.addEventListener('pointerout', function (event) {
+          var node = this.layoutItem;
+          if (!node) { return; }
+          if (!this.fixed) {
+            node.fixed = false;
+          }
+        }.bind(this));
+        // Click to unfix
+        this.addEventListener('tap', function (event) {
+          var node = this.layoutItem;
+          if (!node) { return; }
+          if (this.fixed) {
+            this.fixed = false;
+            node.fixed = false;
+          }
+        }.bind(this));
+        // Draggable
+        this.addEventListener('track', function (event) {
+          var node = this.layoutItem;
+          if (!node) { return; }
+          this.fixed = true;
+          node.fixed = true;
+          node.x += event.ddx;
+          node.px = node.x;
+          node.y += event.ddy;
+          node.py = node.y;
+        }.bind(this));
+        // this.addEventListener('trackend', function (event) {
+        //   var node = this.layoutItem;
+        //   if (!node) { return; }
+        //   node.fixed = false;
+        // }.bind(this));
+      },
+      enteredView: function () {
+        // HACK
+        this.graph = document.querySelector("tag-graph-editor").$.taggraph;
+        this.checkTags();
+      },
+      fixedChanged: function () {
+        this.className = this.fixed ? "fixed" : "";
+      },
+      htmlChanged: function () {
+        this.innerHTML = this.html;
+        this.checkTags();
+      },
+      checkTagsTimeout: null,
+      checkTags: function () {
+        if (this.checkTagsTimeout !== null) {
+          clearTimeout(this.checkTagsTimeout);
+          this.checkTagsTimeout = null;
+        }
+        this.checkTagsTimeout = setTimeout(this.checkTagsDebounced.bind(this), 500);
+      },
+      checkTagsDebounced: function () {
+        // Hash tags
+        var content = this.innerHTML;
+        // Get array of tags
+        var reg = /#[^\s\.!?,:]+/g;
+        var tags = this.innerHTML.match(reg);
+        if (!tags) { return; }
+        tags = tags.map(function(tag){
+          return tag.substr(1).toLowerCase();
+        });
+        // Wrap hashtags
+        this.innerHTML = this.innerHTML.replace(reg, function(hash){
+          var show = hash.substr(1);
+          var tag = show.toLowerCase();
+          return '<a href="#'+tag+'">' + show + "</a>";
+        });
+
+        this.tags = tags;
+      },
+      tagsChanged: function () {
+        console.log(this.tags, this.linkedTags);
+        // Add or connect tags
+        this.tags.forEach(function(tag){
+          if (this.linkedTags.indexOf(tag) !== -1) {
+            return;
+          } else {
+            this.linkedTags.push(tag);
+          }
+          var tagEl = this.graph.addTag(tag);
+          this.graph.addLink(this, tagEl);
+        }.bind(this));
+      },
+      leftView: function () {
+        // Clean up
+      }
+    });
+  </script>
+  
+</polymer-element>

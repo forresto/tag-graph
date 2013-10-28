@@ -1,14 +1,17 @@
 <link rel="import" href="tag-graph-edges.html">
 <link rel="import" href="tag-graph-tags.html">
 <link rel="import" href="tag-graph-tag.html">
-<link rel="import" href="hash-tag.html">
+<link rel="import" href="tag-graph-nodes.html">
+<link rel="import" href="tag-graph-node.html">
 
-<polymer-element name="tag-graph" attributes="width height" touch-action="none">
+<polymer-element name="tag-graph" attributes="width height left" touch-action="none">
 
   <template>
     <tag-graph-edges id="edges"></tag-graph-edges>
     <tag-graph-tags id="tags"></tag-graph-tags>
-    <content></content>
+    <tag-graph-nodes id="nodes">
+      <content></content>
+    </tag-graph-nodes>
   </template>
 
   <link rel="stylesheet" href="tag-graph.css" />
@@ -26,6 +29,7 @@
       links: [],
       width: 500,
       height: 500,
+      left: 0,
       ready: function () {
         this.observe();
 
@@ -38,48 +42,34 @@
           this.addNode(el);
         }.bind(this));
 
-        // d3
-        this.setupForceLayout();
-
         // Draggable
         this.setupGestures();
       },
       enteredView: function () {
+        // d3
+        this.setupForceLayout();
       },
       setupGestures: function () {
-        function getNode (event, context) {
-          var index = context.visibleNodes.indexOf(event.target);
-          if (index === -1) { 
-            return; 
-          }
-          return context.layoutNodes[index];
-        }
-        window.addEventListener('pointerover', function (event) {
-          var node = getNode(event, this);
-          if (!node) { return; }
-          node.fixed = true;
-          this.force.resume();
-        }.bind(this));
-        window.addEventListener('pointerout', function (event) {
-          var node = getNode(event, this);
-          if (!node) { return; }
-          node.fixed = false;
-          this.force.resume();
-        }.bind(this));
+        // var getNode = function (event) {
+        //   var index = this.visibleNodes.indexOf(event.target);
+        //   if (index === -1) { 
+        //     index = this.visibleNodes.indexOf(event.target.parentNode);
+        //     if (index === -1) { 
+        //       return; 
+        //     }
+        //   }
+        //   return this.layoutNodes[index];
+        // }.bind(this);
+        // // Editable
+        // window.addEventListener('pointerdown', function (event) {
+        //   var node = getNode(event, this);
+        //   if (!node) { return; }
+        // }.bind(this));
+        // Draggable bump graph
         window.addEventListener('track', function (event) {
-          var node = getNode(event, this);
-          if (!node) { return; }
-          node.fixed = true;
-          node.x += event.ddx;
-          node.px = node.x;
-          node.y += event.ddy;
-          node.py = node.y;
           this.force.resume();
         }.bind(this));
         window.addEventListener('trackend', function (event) {
-          var node = getNode(event, this);
-          if (!node) { return; }
-          node.fixed = false;
           this.force.resume();
         }.bind(this));
       },
@@ -99,6 +89,9 @@
           this.force.resume();
         }
       },
+      leftChanged: function () {
+        this.style.left = this.left+"px";
+      },
       setupForceLayout: function () {
         // Todo: extract the needed stuff from d3
 
@@ -110,7 +103,7 @@
           .nodes(this.layoutNodes)
           .links(this.links)
           .linkDistance(75)
-          .charge(-300)
+          .charge(-500)
           .on("tick", tick);
 
         this.force = force;
@@ -183,10 +176,7 @@
 
       },
       addNode: function (el) {
-        // Short circuit for tag-graph elements
-        if (el.nodeName.indexOf('TAG-GRAPH') !== -1) { return; }
         if (!el.innerHTML) { return; }
-
         // Short circuit for already-added elements
         if (this.nodes.indexOf(el) !== -1) {
           return;
@@ -195,47 +185,10 @@
           this.addVisible(el);
         }
 
-        // Hash tags
-        var content = el.innerHTML;
-        // Get array of tags
-        var reg = /#[^\s]+/g;
-        var tags = el.innerHTML.match(reg);
-        if (tags) {
-          tags = tags.map(function(tag){
-            return tag.substr(1).toLowerCase();
-          });
-          var dataTags = el.dataset.tags;
-          if (dataTags) {
-            // Make sure already-set tags are kept
-            dataTags = dataTags.split(" ");
-            dataTags.forEach(function(tag){
-              // Only unique
-              if (tags.indexOf(tag) === -1) {
-                tags.push(tag);
-              }
-            });
-          }
-          el.dataset.tags = tags.join(" ");
-        }
-        // Wrap hashtags
-        el.innerHTML = el.innerHTML.replace(reg, function(hash){
-          var show = hash.substr(1);
-          var tag = show.toLowerCase();
-          return '<hash-tag tag="'+tag+'">' + show + "</hash-tag>";
-        });
-
-        // Attribute tags, including all added above
-        var nodeIndex = this.visibleNodes.indexOf(el);
-        el.dataset.tags.split(" ").forEach(function(tag){
-          var tagEl = this.addTag(tag);
-          this.links.push({
-            source: nodeIndex,
-            target: this.visibleNodes.indexOf(tagEl)
-          });
-        }.bind(this));
-
-        // Make editable
-        el.contentEditable = true;
+        // var tags = el.checkTags();
+        // tags.forEach(function(tag){
+        //   var tagEl = this.addTag(tag);
+        // }.bind(this));
 
         // Flickr, Twitter, YouTube link tags?
 
@@ -252,7 +205,8 @@
           el = this.tagElements[index];
         } else {
           el = document.createElement("tag-graph-tag");
-          el.textContent = tag;
+          el.tag = tag;
+          // el.textContent = tag;
           this.$.tags.appendChild(el);
           this.addVisible(el);
 
@@ -265,40 +219,55 @@
         // Only unique
         if (this.visibleNodes.indexOf(el) === -1) {
           this.visibleNodes.push(el);
-          this.layoutNodes.push({
+          var layout = {
             index: this.visibleNodes.length-1,
             x: 0,
             y: 0,
             fixed: false,
             el: el
-          });
+          };
+          el.layoutItem = layout;
+          this.layoutNodes.push(layout);
         }
+      },
+      addLink: function (source, target) {
+        var link = {
+          source: this.visibleNodes.indexOf(source),
+          target: this.visibleNodes.indexOf(target)
+        };
+        this.links.push(link);
+      },
+      linksChanged: function () {
+        if (this.restartForce) { this.restartForce(); }
       },
       observer: null,
       handleMutations: function (mutations) {
         mutations.forEach(function (mutation) {
-          var addedNodes = Array.prototype.slice.call(mutation.addedNodes);
-          addedNodes.forEach(function (node) {
-            switch (node.nodeName) {
-              default: 
-                this.addNode(node);
-                break;
-            }
-          }.bind(this));
-          var removedNodes = Array.prototype.slice.call(mutation.removedNodes);
-          removedNodes.forEach(function (node) {
-            switch (node.nodeName) {
-            }
-          }.bind(this));
+          switch (mutation.type) {
+            case 'childList':
+              var addedNodes = Array.prototype.slice.call(mutation.addedNodes);
+                addedNodes.forEach(function (node) {
+                  switch (node.nodeName) {
+                    default: 
+                      this.addNode(node);
+                      break;
+                  }
+                }.bind(this));
+                var removedNodes = Array.prototype.slice.call(mutation.removedNodes);
+                removedNodes.forEach(function (node) {
+                  switch (node.nodeName) {
+                  }
+                }.bind(this));
+              break;
+            default:
+              break;
+          }
         }.bind(this));
       },
       observe: function () {
         this.observer = new MutationObserver(this.handleMutations.bind(this));
-        this.observer.observe(this, {
-          subtree: false,
-          childList: true,
-          attributes: false,
-          characterData: false
+        this.observer.observe(this.$.nodes, {
+          childList: true
         });
       },
       leftView: function () {

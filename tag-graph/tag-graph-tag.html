@@ -1,13 +1,16 @@
-<polymer-element name="tag-graph-tag">
+<link rel="import" href="tag-graph-node.html">
+
+<polymer-element name="tag-graph-tag" touch-action="none" attributes="tag" extends="tag-graph-node" lightdom>
 
   <template>
-    <content></content>
+    <span name="{{tag}}">{{tag}}</span>
   </template>
 
   <script>
     "use strict";
     Polymer('tag-graph-tag', {
-      ready: function () {
+      enteredView: function () {
+        this.setAttribute("name", this.textContent);
       }
     });
   </script>
